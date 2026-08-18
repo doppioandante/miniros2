@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(uros2_standalone)
+project(miniros2_standalone)
 
 list(PREPEND CMAKE_PREFIX_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/ament_cmake_mock"

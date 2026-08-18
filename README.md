@@ -1,4 +1,4 @@
-# uros2 Standalone Build
+# miniros2 Standalone Build
 
 Building `rmw` and `rcl` without a full ROS 2 / ament_cmake installation.
 
@@ -16,9 +16,14 @@ submodules:
 ```bash
 git submodule update --init --recursive
 ./scripts/apply_submodule_patches.sh
+./scripts/setup_venv.sh
 ```
 
 See "Per-Repository Source Edits" below for what each patch does.
+`setup_venv.sh` creates the `uv`-managed `.venv` (if missing), installs
+`empy`/`lark`, and writes `.venv/lib/python3.x/site-packages/miniros2_sources.pth`
+pointing at the source-tree rosidl Python packages (see below) so they're
+importable without being pip-installed.
 
 ## Build Command
 
@@ -44,8 +49,11 @@ Python (with `empy`, `lark`) is needed because:
 - `rosidl_generator_c` and `rosidl_generator_type_description` run Python generators at build time
 
 Source-tree Python packages (`rosidl_adapter`, `rosidl_generator_c`,
-`rosidl_generator_type_description`, `rosidl_parser`, `rosidl_pycommon`) are
-made importable via `.venv/lib/python3.x/site-packages/uros2_sources.pth`.
+`rosidl_generator_type_description`, `rosidl_parser`, `rosidl_pycommon`,
+`rosidl_generator_cpp`, `rosidl_typesupport_introspection_c`/`_cpp`,
+`rosidl_typesupport_c`/`_cpp`) are made importable via
+`.venv/lib/python3.x/site-packages/miniros2_sources.pth`, written by
+`scripts/setup_venv.sh` (see "Setup" above).
 
 ## Current Status
 
@@ -158,65 +166,20 @@ The following ament mechanisms are implemented in `ament_cmake_mock/`:
 
 ## Per-Repository Source Edits
 
-Each subfolder that is its own git checkout was inspected with `git diff` /
-`git status`. Only `rosidl` carries a tracked local change; the rest are
-pristine (`ament_index`, `cyclonedds`, `libyaml_vendor`, `rcl`,
-`rcl_interfaces`, `rcl_logging`, `rcpputils`, `rcutils`, `rmw`,
-`rmw_cyclonedds`, `rmw_dds_common`, `ros2_tracing`, `rosidl_defaults`,
-`rosidl_dynamic_typesupport`, `rosidl_typesupport`) — `rmw_implementation`
-and `rosidl_core` only carry generated, untracked config-extras files (see
-below).
+Only `rosidl` carries a tracked local change:
+`rosidl_generator_type_description/cmake/rosidl_generator_type_description_generate_interfaces.cmake`
+adds an explicit build-graph dependency on each dependency package's
+`…__rosidl_generator_type_description` target. In a single-tree standalone
+build the dependency packages are sibling subdirectories, so this prevents a
+parallel-build race where a dependency's type-hash JSON is read before it has
+been generated. It's stored as a diff in `patches/` and applied to the
+git-submodule checkout by `scripts/apply_submodule_patches.sh` (see "Setup"
+above).
 
-### `rosidl/`
-- **Tracked edit** — `rosidl_generator_type_description/cmake/rosidl_generator_type_description_generate_interfaces.cmake`:
-  adds an explicit build-graph dependency on each dependency package's
-  `…__rosidl_generator_type_description` target. In a single-tree standalone
-  build the dependency packages are sibling subdirectories, so this prevents a
-  parallel-build race where a dependency's type-hash JSON is read before it has
-  been generated.
-- **Untracked** — generated `*-extras.cmake` files written into the package
-  `cmake/` source dirs (by the `ament_cmake_mock` CONFIG_EXTRAS processing),
-  each with a source-tree path-fixup block (`BIN`/`GENERATOR_FILES`/`TEMPLATE_DIR`
-  fall back to `CMAKE_CURRENT_LIST_DIR/..` when the install-layout path is
-  absent):
-  - `rosidl_generator_c/cmake/rosidl_generator_c-extras.cmake`
-  - `rosidl_generator_cpp/cmake/rosidl_generator_cpp-extras.cmake`
-  - `rosidl_generator_type_description/cmake/rosidl_generator_type_description-extras.cmake`
-  - `rosidl_typesupport_introspection_c/cmake/rosidl_typesupport_introspection_c-extras.cmake`
-  - `rosidl_typesupport_introspection_cpp/cmake/rosidl_typesupport_introspection_cpp-extras.cmake`
-
-### `rmw_implementation/`
-- **Untracked** — `rmw_implementation/cmake/rmw_implementation-extras.cmake`,
-  the generated config-extras hard-wiring `rmw_implementation` as the single RMW
-  implementation (matches the `RMW_IMPLEMENTATION_DISABLE_RUNTIME_SELECTION=ON`
-  build) and creating the `rmw_implementation::rmw_implementation` interface
-  target.
-
-### `rosidl_core/`
-- **Untracked** — `rosidl_core_generators/cmake/rosidl_core_generators-extras.cmake`,
-  the generated config-extras that discovers the registered typesupport /
-  generator packages via `ament_index_get_resources` and re-exports their
-  definitions/includes/libraries.
-
-> Note: the untracked `*-extras.cmake` files are produced into the source trees
-> by the mock's `.cmake.in` CONFIG_EXTRAS handling (see "Implemented Mock
-> Mechanisms"); they are regenerated on configure and are not meant to be
-> committed to the upstream repos.
-
-The tracked edit above (`rosidl/`) is stored as a diff in `patches/` and
-applied to the git-submodule checkout by `scripts/apply_submodule_patches.sh`
-(see "Setup" above).
-
-### Known harmless warnings
-Configure prints `message(WARNING ...)` lines like `Package 'builtin_interfaces'
-exports the typesupport target '...' which doesn't exist` for a few message
-packages. These come from upstream's
-`rosidl_cmake_export_typesupport_targets-extras.cmake` template running before
-that package's own `rosidl_typesupport_c`/`_cpp` target is registered — an
-extension-execution-order gap in the mock's `ament_execute_extensions`, not a
-missing target. The aggregated `${PKG}_TARGETS` list is still populated
-correctly afterward, so the build is unaffected; fixing the ordering is left
-for later.
+`rosidl`, `rmw_implementation`, and `rosidl_core` also pick up untracked,
+generated `*-extras.cmake` config files (produced by the mock's `.cmake.in`
+CONFIG_EXTRAS handling — see "Implemented Mock Mechanisms") that are
+regenerated on every configure and not meant to be committed.
 
 ## Package Layout
 

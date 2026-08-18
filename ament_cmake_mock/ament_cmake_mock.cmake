@@ -22,6 +22,19 @@ macro(ament_export_libraries)
 endmacro()
 
 macro(ament_export_targets)
+  # Real ament_cmake generates `${PROJECT_NAME}::${target}` ALIAS targets for
+  # each exported target when it writes the install-tree Config.cmake. Nothing
+  # here installs a real Config, but downstream generated extras (e.g.
+  # rosidl_cmake_export_typesupport_targets-extras.cmake.in) still check for
+  # the namespaced alias, so create it directly on the real target.
+  foreach(_aet_target ${ARGN})
+    if(TARGET "${_aet_target}" AND NOT TARGET "${PROJECT_NAME}::${_aet_target}")
+      get_target_property(_aet_type "${_aet_target}" TYPE)
+      if(NOT _aet_type STREQUAL "UTILITY")
+        add_library("${PROJECT_NAME}::${_aet_target}" ALIAS "${_aet_target}")
+      endif()
+    endif()
+  endforeach()
 endmacro()
 
 macro(ament_export_link_flags)
