@@ -5,7 +5,7 @@ Building `rmw` and `rcl` without a full ROS 2 / ament_cmake installation.
 ## Strategy
 
 `ament_cmake_mock/` provides stub CMake macros for all `ament_*` functions so
-packages can be built with plain CMake.  Real source packages are added via
+packages can be built with plain CMake. Real source packages are added via
 `add_subdirectory()` in dependency order in the top-level `CMakeLists.txt`.
 
 ## Setup
@@ -47,32 +47,48 @@ Source-tree Python packages (`rosidl_adapter`, `rosidl_generator_c`,
 `rosidl_generator_type_description`, `rosidl_parser`, `rosidl_pycommon`) are
 made importable via `.venv/lib/python3.x/site-packages/uros2_sources.pth`.
 
-## Current Status: configures and compiles successfully
-- `rcutils`
-- `rosidl_typesupport_interface`
-- `rosidl_runtime_c`
-- `rosidl_dynamic_typesupport`
-- `rmw`
-- `rosidl_cmake` (CMake macro package)
-- `rosidl_core_generators` / `rosidl_default_generators` (meta packages)
-- `rosidl_adapter` (`.msg` → `.idl` conversion at configure time)
-- `rosidl_generator_c` (generates C headers from IDL at build time)
-- `rosidl_generator_type_description` (generates type hash JSON at build time)
-- `rcl_logging_interface`
-- `rcl_logging_noop`
-- `tracetools` (with `TRACETOOLS_DISABLED=ON`)
-- `rmw_implementation` (runtime dlopen dispatcher — see "Dynamic (runtime)
-  RMW Selection" below)
-- `builtin_interfaces` — C headers + type hashes generated ✓
-- `service_msgs` — C headers + type hashes generated ✓
-- `type_description_interfaces` — C headers + type hashes generated ✓
-- `rcl_interfaces` — C headers + type hashes generated ✓
-- `rcl_yaml_param_parser` — compiles successfully ✓
-- `rcl` — compiles and links (`build/rcl/rcl/librcl.a`) ✓
+## Current Status
+
+The full tree — `rcutils` through `rcl`, all rosidl codegen packages, message
+packages (`builtin_interfaces`, `service_msgs`, `type_description_interfaces`,
+`rcl_interfaces`), `rmw`, `rmw_cyclonedds_cpp` against a standalone CycloneDDS
+core, and the `rmw_implementation` dlopen dispatcher — configures, compiles,
+and links with a single `cmake --build build`.
+
+The dispatcher is wired for **runtime** RMW selection: `librcl.so` links
+`librmw_implementation.so` rather than a concrete `rmw_*` backend, and the
+middleware is chosen at runtime via `RMW_IMPLEMENTATION` / `dlopen`, same as a
+normal ROS 2 install. Only `rmw_cyclonedds_cpp` is registered today, so this
+proves the mechanism rather than an actual choice between middlewares; adding
+a second `rmw_*` package is the natural next step.
+
+`smoke_test/rcl_pubsub_smoke_test.c` publishes and subscribes a
+`builtin_interfaces/msg/Time` message in-process via `rcl` and confirms the
+round-trip, exercising rcl → rmw_implementation → rmw_cyclonedds_cpp →
+CycloneDDS end-to-end. It passes with both the default and an explicit
+`RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`:
+
+```bash
+cmake --install build
+export AMENT_PREFIX_PATH="$(pwd)/prefix"
+export LD_LIBRARY_PATH="$(pwd)/prefix/lib"
+./build/rcl_pubsub_smoke_test
+RMW_IMPLEMENTATION=rmw_cyclonedds_cpp ./build/rcl_pubsub_smoke_test
+```
+
+Its `CMakeLists.txt` target links `rcl_interfaces__rosidl_typesupport_c` and
+`type_description_interfaces__rosidl_typesupport_c` explicitly — `librcl.so`
+has unresolved typesupport symbols that are tolerated when it's built as a
+`.so` alone but must be resolved once something actually links `rcl` into an
+executable.
+
+The `iceoryx_binding_c` shared-memory dependency is not needed since
+CycloneDDS core is built with `ENABLE_SHM=OFF`; revisit if shared-memory
+transport is wanted.
 
 ## Implemented Mock Mechanisms
 
-The following ament mechanisms are now implemented in `ament_cmake_mock/`:
+The following ament mechanisms are implemented in `ament_cmake_mock/`:
 
 - **`ament_register_extension` / `ament_execute_extensions`**: Uses a CMake
   `CACHE INTERNAL` list to store `extension_point → [pkg:cmake_file, ...]`
@@ -83,16 +99,16 @@ The following ament mechanisms are now implemented in `ament_cmake_mock/`:
   Required for `rosidl_core_generators` to discover generator packages.
 
 - **`.cmake.in` CONFIG_EXTRAS**: `ament_package(CONFIG_EXTRAS foo.cmake.in)`
-  now processes the template via `configure_file(@ONLY)` into the package's
+  processes the template via `configure_file(@ONLY)` into the package's
   `cmake/` source directory (so `CMAKE_CURRENT_LIST_DIR` resolves correctly),
   then appends a path-fixup block for source-tree BIN/GENERATOR_FILES/TEMPLATE_DIR.
 
-- **`ament_package` extension hooks**: `ament_package()` now calls
+- **`ament_package` extension hooks**: `ament_package()` calls
   `ament_execute_extensions("ament_package")` so the `rosidl_cmake` hooks
   run and set `${PROJECT_NAME}_IDL_FILES` in the generated Config.cmake.
 
 - **`DATADIR` + `_DIR` for message packages**: Config.cmake for rosidl message
-  packages now sets:
+  packages sets:
   - `${PKG}_DATADIR` → adapted IDL output dir (used by `rosidl_find_package_idl`)
   - `${PKG}_DIR` → `type_description_output/cmake` so `_DIR/..` resolves to
     the type-hash JSON output dir (used by the type description generator)
@@ -103,115 +119,42 @@ The following ament mechanisms are now implemented in `ament_cmake_mock/`:
 - **Re-entry guard**: Config.cmake files include a loading guard that prevents
   infinite recursion when extras cmake files call `find_package(${PKG})`.
 
-## Resolved Blockers (rcl now builds)
+- **`${PKG}_TARGETS` aggregation**: The rosidl typesupport extras only
+  populate per-suffix variables like `${PKG}_TARGETS__rosidl_generator_c`,
+  while consumers (rcl) link against the aggregate `${PKG}_TARGETS`.
+  `ament_package` handles `${PKG}_CONFIG_EXTRAS_POST` and aggregates the
+  per-typesupport target lists into `${PKG}_TARGETS` in the generated
+  Config.cmake.
 
-1. **`type_description_interfaces` include path / `<pkg>_TARGETS`**: The rosidl
-   typesupport extras only populated per-suffix variables like
-   `${PKG}_TARGETS__rosidl_generator_c`, while consumers (rcl) link against the
-   aggregate `${PKG}_TARGETS`. The `ament_package` mock now (a) handles
-   `${PKG}_CONFIG_EXTRAS_POST` and (b) aggregates the per-typesupport target
-   lists into `${PKG}_TARGETS` in the generated Config.cmake, so the generated
-   headers' include dirs propagate to rcl via the linked targets.
-
-2. **`ROS_PACKAGE_NAME`**: `ament_generate_version_header` mock in
-   `ament_cmake_mock/ament_cmake_gen_version_h-config.cmake` now adds
-   `-DROS_PACKAGE_NAME="${_pkg_name}"` as a compile definition on the target,
-   matching real ament_cmake behaviour (needed by the `RCUTILS_LOG_*_NAMED`
-   logging macros).
-
-## Cyclone DDS rmw — Builds ✅
-
-`rmw_cyclonedds_cpp` now configures, compiles and links against the standalone
-CycloneDDS core. The whole chain builds with a single `cmake --build build`:
-
-- `build/rmw_cyclonedds/rmw_cyclonedds_cpp/librmw_cyclonedds_cpp.so` is produced
-  and links the installed `prefix/lib/libddsc.so.0` (verified with `ldd`).
-- `librmw_dds_common.so` (+ its typesupport variants) and `librcl.so` build too.
-
-The dependency chain it pulls in is substantial; the pieces that made it work:
-
-### ✅ Done
-- **CycloneDDS core** (`cyclonedds/`, branch `releases/0.10.x`) builds and
-  installs into `prefix/` (`libddsc.so`, `lib/cmake/CycloneDDS`, `idlc`). Found
-  via `find_package(CycloneDDS)` since `prefix/` is on `CMAKE_PREFIX_PATH`.
-- **Newly cloned repos** (all `jazzy`): `rosidl_typesupport`
-  (`rosidl_typesupport_c` / `_cpp`), `rcpputils`, `rmw_dds_common`.
-- **Top-level `CMakeLists.txt`** extended with the C++ message-generation chain
-  (`rcpputils`, `rosidl_runtime_cpp`, `rosidl_generator_cpp`,
-  `rosidl_typesupport_introspection_c` / `_cpp`, `rosidl_typesupport_c` / `_cpp`)
-  before the message packages, plus `rmw_dds_common` and `rmw_cyclonedds_cpp` at
-  the end.
-- **`uros2_sources.pth`** extended so the new Python generators import (verified
-  with `uv run python -c "import ..."`).
-- **`ament_generate_version_header` mock** now included transitively from
-  `ament_cmake_mock.cmake`, so packages that call it without an explicit
+- **`ROS_PACKAGE_NAME`**: `ament_generate_version_header` mock in
+  `ament_cmake_mock/ament_cmake_gen_version_h-config.cmake` adds
+  `-DROS_PACKAGE_NAME="${_pkg_name}"` as a compile definition on the target,
+  matching real ament_cmake behaviour (needed by the `RCUTILS_LOG_*_NAMED`
+  logging macros). Included transitively from `ament_cmake_mock.cmake`, so
+  packages that call it without an explicit
   `find_package(ament_cmake_gen_version_h)` (e.g. `rcpputils`) configure.
 
-### ✅ Resolved: dependency-IDL resolution in typesupport
-`rosidl_typesupport_c` / `_cpp` resolved the IDL files of *dependency* packages
-with a raw install-layout path (`${${_pkg_name}_DIR}/../${_idl_file}`). In this
-standalone tree `${pkg}_DIR` points at the type-description output `cmake/` dir,
-so that path does not exist and configure aborted with
-`Target dependency '.../Duration.idl' does not exist`.
+- **`ament_add_default_options`**: no-op macro (newer `ament_cmake_ros`
+  compiler-option helper that upstream packages like `rmw_dds_common` call).
 
-Both `*_generate_interfaces.cmake` files were patched to use the DATADIR-aware
-helper (the same call `rosidl_generator_c` and the introspection typesupports
-already use):
+- **`pkg::pkg_library` alias**: `ament_package` creates an in-scope ALIAS for
+  a `${PROJECT_NAME}_library` target in addition to `pkg::pkg`, needed because
+  e.g. `rmw_dds_common` names its library target `${PROJECT_NAME}_library`
+  and `rmw_cyclonedds_cpp` links it as `rmw_dds_common::rmw_dds_common_library`
+  (sufficient because the whole tree is one `add_subdirectory` build).
 
-```cmake
-rosidl_find_package_idl(_abs_idl_file "${_pkg_name}" "${_idl_file}")
-```
+- **Dependency-IDL resolution in typesupport**: `rosidl_typesupport_c` /
+  `_cpp` resolve the IDL files of dependency packages via
+  `rosidl_find_package_idl(_abs_idl_file "${_pkg_name}" "${_idl_file}")`
+  (the DATADIR-aware helper `rosidl_generator_c` and the introspection
+  typesupports also use), rather than a raw install-layout path that doesn't
+  exist in this standalone tree.
 
-With this, configure now generates C, C++, introspection and typesupport_c/cpp
-code for **all** message packages and gets through `rcl`, reaching
-`rmw_dds_common`.
-
-### ✅ Resolved: `ament_add_default_options`
-`rmw_dds_common` calls `ament_add_default_options()` (newer `ament_cmake_ros`),
-which just sets default compiler options / C++ standard. Added as a no-op macro
-in `ament_cmake_mock/ament_cmake_mock.cmake`.
-
-### ✅ Resolved: `pkg::pkg_library` alias
-`rmw_dds_common` names its library target `${PROJECT_NAME}_library` and
-`rmw_cyclonedds_cpp` links it as `rmw_dds_common::rmw_dds_common_library`. The
-mock only aliased `pkg::pkg`, so the namespaced `_library` target was missing.
-`ament_package` now also creates an in-scope ALIAS for a `${PROJECT_NAME}_library`
-target (sufficient because the whole tree is one `add_subdirectory` build).
-
-### Next Steps
-- The `iceoryx_binding_c` shared-memory dependency was not needed (CycloneDDS
-  core was built with `ENABLE_SHM=OFF`); `rmw_cyclonedds_cpp` configured without
-  it. Revisit if shared-memory transport is wanted.
-- Link a runnable executable (e.g. a minimal publisher/subscriber on `rcl`) to
-  exercise the CycloneDDS backend end-to-end at runtime, not just at link time.
-
-## Dynamic (runtime) RMW Selection — Enabled ✅
-
-`librcl.so` now links against `librmw_implementation.so` (the dispatcher)
-instead of `librmw_cyclonedds_cpp.so` directly; the middleware is chosen at
-**runtime** via `dlopen`, same as a normal ROS 2 install — no rebuild needed
-to switch `RMW_IMPLEMENTATION`.
-
-Key changes: vendored `ament_index_cpp` (`ament_index/`, from
-`ros2/ament_index@jazzy`), taught `ament_cmake_mock.cmake` to install real
-`share/ament_index/resource_index/<type>/<pkg>` marker files (previously
-resource registration only lived in CMake's configure-time cache), and
-flipped `RMW_IMPLEMENTATION_DISABLE_RUNTIME_SELECTION` to `OFF` in the
-top-level `CMakeLists.txt` (with `rmw_cyclonedds_cpp` + its deps reordered
-earlier so it can register itself before `rmw_implementation` looks for a
-default).
-
-```bash
-cmake --install build
-export AMENT_PREFIX_PATH="$(pwd)/prefix"
-export LD_LIBRARY_PATH="$(pwd)/prefix/lib"
-RMW_IMPLEMENTATION=rmw_cyclonedds_cpp ./your_program   # explicit selection
-./your_program                                          # falls back to the compiled-in default
-```
-
-Only one rmw implementation (`rmw_cyclonedds_cpp`) is registered, so this
-proves the *mechanism* rather than an actual choice between middlewares —
-adding a second `rmw_*` package is the natural next step.
+- **Ament index resource markers**: `ament_cmake_mock.cmake` installs real
+  `share/ament_index/resource_index/<type>/<pkg>` marker files (vendored
+  `ament_index_cpp` in `ament_index/`, from `ros2/ament_index@jazzy`), needed
+  for runtime RMW discovery — resource registration previously only lived in
+  CMake's configure-time cache.
 
 ## Per-Repository Source Edits
 
@@ -226,7 +169,7 @@ below).
 
 ### `rosidl/`
 - **Tracked edit** — `rosidl_generator_type_description/cmake/rosidl_generator_type_description_generate_interfaces.cmake`:
-  added an explicit build-graph dependency on each dependency package's
+  adds an explicit build-graph dependency on each dependency package's
   `…__rosidl_generator_type_description` target. In a single-tree standalone
   build the dependency packages are sibling subdirectories, so this prevents a
   parallel-build race where a dependency's type-hash JSON is read before it has
@@ -272,8 +215,8 @@ packages. These come from upstream's
 that package's own `rosidl_typesupport_c`/`_cpp` target is registered — an
 extension-execution-order gap in the mock's `ament_execute_extensions`, not a
 missing target. The aggregated `${PKG}_TARGETS` list is still populated
-correctly afterward (see "Resolved Blockers" item 1), so the build is
-unaffected; fixing the ordering is left for later.
+correctly afterward, so the build is unaffected; fixing the ordering is left
+for later.
 
 ## Package Layout
 
@@ -287,7 +230,7 @@ rosidl_defaults/        # rosidl_default_generators meta package
 rosidl_dynamic_typesupport/
 rmw/                    # rmw + rmw_implementation_cmake
 rmw_implementation/     # rmw_implementation dispatcher
-rmw_cyclonedds/         # rmw_cyclonedds_cpp (wiring in progress — see WIP section)
+rmw_cyclonedds/         # rmw_cyclonedds_cpp
 rmw_dds_common/         # rmw_dds_common (msgs + cpp lib, needed by rmw_cyclonedds)
 cyclonedds/             # CycloneDDS core (built+installed into prefix/)
 rcpputils/              # C++ utils (needed by rosidl typesupport + rmw)
@@ -296,5 +239,6 @@ rcl_interfaces/         # message packages: builtin_interfaces, service_msgs, �
 rcl_logging/            # rcl_logging_interface + rcl_logging_noop
 ros2_tracing/           # tracetools (built with TRACETOOLS_DISABLED=ON)
 rcl/                    # rcl + rcl_yaml_param_parser
+smoke_test/             # runtime rcl publisher/subscriber smoke test
 prefix/                 # install destination
 ```

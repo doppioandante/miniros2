@@ -71,3 +71,12 @@ add_subdirectory(rcl/rcl_yaml_param_parser)
 
 # rcl
 add_subdirectory(rcl/rcl)
+
+# Runtime smoke test: rcl publisher/subscriber round trip over the compiled-in RMW.
+add_executable(rcl_pubsub_smoke_test smoke_test/rcl_pubsub_smoke_test.c)
+target_link_libraries(rcl_pubsub_smoke_test
+  rcl::rcl
+  builtin_interfaces__rosidl_generator_c
+  builtin_interfaces__rosidl_typesupport_c
+  rcl_interfaces__rosidl_typesupport_c
+  type_description_interfaces__rosidl_typesupport_c)
