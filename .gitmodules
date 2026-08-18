@@ -1,0 +1,85 @@
+[submodule "cyclonedds"]
+	path = cyclonedds
+	url = https://github.com/eclipse-cyclonedds/cyclonedds.git
+	branch = releases/0.10.x
+	shallow = true
+[submodule "libyaml_vendor"]
+	path = libyaml_vendor
+	url = https://github.com/ros2/libyaml_vendor.git
+	branch = jazzy
+	shallow = true
+[submodule "rcl"]
+	path = rcl
+	url = https://github.com/ros2/rcl.git
+	branch = jazzy
+	shallow = true
+[submodule "rcl_interfaces"]
+	path = rcl_interfaces
+	url = https://github.com/ros2/rcl_interfaces.git
+	branch = jazzy
+	shallow = true
+[submodule "rcl_logging"]
+	path = rcl_logging
+	url = https://github.com/ros2/rcl_logging.git
+	branch = jazzy
+	shallow = true
+[submodule "rcpputils"]
+	path = rcpputils
+	url = https://github.com/ros2/rcpputils.git
+	branch = jazzy
+	shallow = true
+[submodule "rcutils"]
+	path = rcutils
+	url = https://github.com/ros2/rcutils.git
+	branch = jazzy
+	shallow = true
+[submodule "rmw"]
+	path = rmw
+	url = https://github.com/ros2/rmw.git
+	branch = jazzy
+	shallow = true
+[submodule "rmw_cyclonedds"]
+	path = rmw_cyclonedds
+	url = https://github.com/ros2/rmw_cyclonedds.git
+	branch = jazzy
+	shallow = true
+[submodule "rmw_dds_common"]
+	path = rmw_dds_common
+	url = https://github.com/ros2/rmw_dds_common.git
+	branch = jazzy
+	shallow = true
+[submodule "rmw_implementation"]
+	path = rmw_implementation
+	url = https://github.com/ros2/rmw_implementation.git
+	branch = jazzy
+	shallow = true
+[submodule "ros2_tracing"]
+	path = ros2_tracing
+	url = https://github.com/ros2/ros2_tracing.git
+	branch = jazzy
+	shallow = true
+[submodule "rosidl"]
+	path = rosidl
+	url = https://github.com/ros2/rosidl.git
+	branch = jazzy
+	shallow = true
+[submodule "rosidl_core"]
+	path = rosidl_core
+	url = https://github.com/ros2/rosidl_core.git
+	branch = jazzy
+	shallow = true
+[submodule "rosidl_defaults"]
+	path = rosidl_defaults
+	url = https://github.com/ros2/rosidl_defaults.git
+	branch = jazzy
+	shallow = true
+[submodule "rosidl_dynamic_typesupport"]
+	path = rosidl_dynamic_typesupport
+	url = https://github.com/ros2/rosidl_dynamic_typesupport.git
+	branch = jazzy
+	shallow = true
+[submodule "rosidl_typesupport"]
+	path = rosidl_typesupport
+	url = https://github.com/ros2/rosidl_typesupport.git
+	branch = jazzy
+	shallow = true
