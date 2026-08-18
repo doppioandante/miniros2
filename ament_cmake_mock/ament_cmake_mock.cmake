@@ -209,6 +209,19 @@ set(${PROJECT_NAME}_DIR \"${_build_cfg_dir}\")
     #   Points to the rosidl_adapter output dir where the adapted .idl files live.
     string(APPEND _cfg_content "set(${PROJECT_NAME}_DATADIR \"${_adapted_idl_dir}\")\n")
     #
+    # rosidl_typesupport_c/_cpp (upstream, unpatched) resolves *dependency* IDL
+    # files with the raw install-layout expression `${${pkg}_DIR}/../${idl_file}`
+    # instead of the DATADIR-aware helper. To keep that working without patching
+    # rosidl_typesupport, mirror each adapted .idl file into the type_description
+    # output tree (which _DIR/.. already points at, see below), so both the raw
+    # path expression and rosidl_generator_type_description's INCLUDE_PATHS
+    # resolve against the same directory.
+    foreach(_idl_rel ${_rosidl_cmake_IDL_FILES})
+      get_filename_component(_idl_rel_dir "${_idl_rel}" DIRECTORY)
+      file(MAKE_DIRECTORY "${_type_desc_dir}/${_idl_rel_dir}")
+      file(COPY "${_adapted_idl_dir}/${_idl_rel}" DESTINATION "${_type_desc_dir}/${_idl_rel_dir}")
+    endforeach()
+    #
     # _DIR/.. : rosidl_generator_type_description_generate_interfaces.cmake uses this
     #   to build include paths for finding dependency .json type-hash files.
     #   By pointing _DIR one level inside the type_description output, _DIR/.. resolves

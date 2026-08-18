@@ -7,6 +7,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 patch_dir="$repo_root/patches"
 
 for patch in "$patch_dir"/*.patch; do
+  [ -e "$patch" ] || continue
   name="$(basename "$patch" .patch)"
   target="$repo_root/$name"
   if [ ! -d "$target" ]; then

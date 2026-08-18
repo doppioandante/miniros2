@@ -47,9 +47,7 @@ Source-tree Python packages (`rosidl_adapter`, `rosidl_generator_c`,
 `rosidl_generator_type_description`, `rosidl_parser`, `rosidl_pycommon`) are
 made importable via `.venv/lib/python3.x/site-packages/uros2_sources.pth`.
 
-## Current Status
-
-### ✅ Configures and compiles successfully
+## Current Status: configures and compiles successfully
 - `rcutils`
 - `rosidl_typesupport_interface`
 - `rosidl_runtime_c`
@@ -63,10 +61,8 @@ made importable via `.venv/lib/python3.x/site-packages/uros2_sources.pth`.
 - `rcl_logging_interface`
 - `rcl_logging_noop`
 - `tracetools` (with `TRACETOOLS_DISABLED=ON`)
-- `rmw_implementation` (built as a runtime dlopen dispatcher — see "Dynamic
-  (runtime) RMW Selection" below; was originally built with
-  `RMW_IMPLEMENTATION_DISABLE_RUNTIME_SELECTION=ON`, statically linking a
-  single rmw implementation)
+- `rmw_implementation` (runtime dlopen dispatcher — see "Dynamic (runtime)
+  RMW Selection" below)
 - `builtin_interfaces` — C headers + type hashes generated ✓
 - `service_msgs` — C headers + type hashes generated ✓
 - `type_description_interfaces` — C headers + type hashes generated ✓
@@ -220,10 +216,13 @@ adding a second `rmw_*` package is the natural next step.
 ## Per-Repository Source Edits
 
 Each subfolder that is its own git checkout was inspected with `git diff` /
-`git status`. Only four repos carry local changes; the rest are pristine
-(`cyclonedds`, `libyaml_vendor`, `rcl`, `rcl_interfaces`, `rcl_logging`,
-`rcpputils`, `rcutils`, `rmw`, `rmw_cyclonedds`, `rmw_dds_common`,
-`ros2_tracing`, `rosidl_defaults`, `rosidl_dynamic_typesupport`).
+`git status`. Only `rosidl` carries a tracked local change; the rest are
+pristine (`ament_index`, `cyclonedds`, `libyaml_vendor`, `rcl`,
+`rcl_interfaces`, `rcl_logging`, `rcpputils`, `rcutils`, `rmw`,
+`rmw_cyclonedds`, `rmw_dds_common`, `ros2_tracing`, `rosidl_defaults`,
+`rosidl_dynamic_typesupport`, `rosidl_typesupport`) — `rmw_implementation`
+and `rosidl_core` only carry generated, untracked config-extras files (see
+below).
 
 ### `rosidl/`
 - **Tracked edit** — `rosidl_generator_type_description/cmake/rosidl_generator_type_description_generate_interfaces.cmake`:
@@ -243,17 +242,6 @@ Each subfolder that is its own git checkout was inspected with `git diff` /
   - `rosidl_typesupport_introspection_c/cmake/rosidl_typesupport_introspection_c-extras.cmake`
   - `rosidl_typesupport_introspection_cpp/cmake/rosidl_typesupport_introspection_cpp-extras.cmake`
 
-### `rosidl_typesupport/`
-- **Tracked edits** — `rosidl_typesupport_c/cmake/rosidl_typesupport_c_generate_interfaces.cmake`
-  and the `_cpp` equivalent: replaced the install-layout dependency-IDL path
-  (`${${_pkg_name}_DIR}/../${_idl_file}` + `normalize_path`) with the
-  DATADIR-aware helper `rosidl_find_package_idl(...)`, matching what
-  `rosidl_generator_c` and the introspection typesupports already use (see the
-  "dependency-IDL resolution" section above).
-- **Untracked** — generated `rosidl_typesupport_c/cmake/rosidl_typesupport_c-extras.cmake`
-  and `rosidl_typesupport_cpp/cmake/rosidl_typesupport_cpp-extras.cmake`, again
-  with the source-tree path-fixup block.
-
 ### `rmw_implementation/`
 - **Untracked** — `rmw_implementation/cmake/rmw_implementation-extras.cmake`,
   the generated config-extras hard-wiring `rmw_implementation` as the single RMW
@@ -272,9 +260,20 @@ Each subfolder that is its own git checkout was inspected with `git diff` /
 > Mechanisms"); they are regenerated on configure and are not meant to be
 > committed to the upstream repos.
 
-The tracked edits above (`rosidl/`, `rosidl_typesupport/`) are stored as diffs
-in `patches/` and applied to the git-submodule checkouts by
-`scripts/apply_submodule_patches.sh` (see "Setup" above).
+The tracked edit above (`rosidl/`) is stored as a diff in `patches/` and
+applied to the git-submodule checkout by `scripts/apply_submodule_patches.sh`
+(see "Setup" above).
+
+### Known harmless warnings
+Configure prints `message(WARNING ...)` lines like `Package 'builtin_interfaces'
+exports the typesupport target '...' which doesn't exist` for a few message
+packages. These come from upstream's
+`rosidl_cmake_export_typesupport_targets-extras.cmake` template running before
+that package's own `rosidl_typesupport_c`/`_cpp` target is registered — an
+extension-execution-order gap in the mock's `ament_execute_extensions`, not a
+missing target. The aggregated `${PKG}_TARGETS` list is still populated
+correctly afterward (see "Resolved Blockers" item 1), so the build is
+unaffected; fixing the ordering is left for later.
 
 ## Package Layout
 

@@ -83,3 +83,8 @@
 	url = https://github.com/ros2/rosidl_typesupport.git
 	branch = jazzy
 	shallow = true
+[submodule "ament_index"]
+	path = ament_index
+	url = https://github.com/ament/ament_index.git
+	branch = jazzy
+	shallow = true
