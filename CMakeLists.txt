@@ -6,7 +6,13 @@ list(PREPEND CMAKE_PREFIX_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/prefix"
 )
 
-set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/prefix" CACHE PATH "" FORCE)
+# Default to an in-tree prefix/ (matches the cyclonedds core install below
+# and the README's local dev workflow), but respect an explicit
+# -DCMAKE_INSTALL_PREFIX passed on the command line (e.g. BinaryBuilder's
+# packaging build, which needs everything installed into its own destdir).
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+  set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/prefix" CACHE PATH "" FORCE)
+endif()
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 # Build shared libraries (.so). ROS 2 packages use bare add_library() so they
 # honor BUILD_SHARED_LIBS; position-independent code is required for linking
@@ -80,3 +86,4 @@ target_link_libraries(rcl_pubsub_smoke_test
   builtin_interfaces__rosidl_typesupport_c
   rcl_interfaces__rosidl_typesupport_c
   type_description_interfaces__rosidl_typesupport_c)
+install(TARGETS rcl_pubsub_smoke_test RUNTIME DESTINATION bin)
