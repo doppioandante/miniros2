@@ -1,10 +1,3 @@
-# Note: to use the local sources, you must first run (from the repo root):
-#   git submodule update --init --recursive
-# so that submodule contents are present on disk before DirectorySource
-# copies them into the sandbox. Patches are applied inside the build script
-# below (see apply_patches), so apply_submodule_patches.sh does not need to
-# be run beforehand.
-
 using BinaryBuilder
 
 name = "miniros2"
