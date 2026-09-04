@@ -19,9 +19,32 @@ After cloning (with submodules):
 ```bash
 git submodule update --init --recursive
 ./scripts/setup_venv.sh
+```
+
+CycloneDDS core (`cyclonedds/`) must be built and installed into `prefix/`
+separately, before the main build:
+
+```bash
+cmake -G Ninja -B cyclonedds/build -S cyclonedds \
+  -DCMAKE_INSTALL_PREFIX="$PWD/prefix" \
+  -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF
+cmake --build cyclonedds/build --target install
+```
+
+Then build the rest:
+
+```bash
 mkdir build
 uv run cmake -G Ninja -B build
 uv run cmake --build build
+uv run cmake --build build --target install
+```
+
+### Running the smoke test
+
+```bash
+AMENT_PREFIX_PATH="$PWD/prefix" LD_LIBRARY_PATH="$PWD/prefix/lib" \
+  ./prefix/bin/rcl_pubsub_smoke_test
 ```
 
 ## Supported Middlewares
@@ -47,7 +70,7 @@ rmw/                    # rmw + rmw_implementation_cmake
 rmw_implementation/     # rmw_implementation dispatcher
 rmw_cyclonedds/         # rmw_cyclonedds_cpp
 rmw_dds_common/         # rmw_dds_common (msgs + cpp lib, needed by rmw_cyclonedds)
-cyclonedds/             # CycloneDDS core (built+installed into prefix/)
+cyclonedds/             # CycloneDDS core (built+installed into prefix/ separately, see Building)
 rcpputils/              # C++ utils (needed by rosidl typesupport + rmw)
 rosidl_typesupport/     # rosidl_typesupport_c / rosidl_typesupport_cpp
 rcl_interfaces/         # message packages: builtin_interfaces, service_msgs, …
