@@ -286,6 +286,21 @@ set(${PROJECT_NAME}_DIR \"${_build_cfg_dir}\")
     string(APPEND _cfg_content "find_package(${_dep} QUIET)\n")
   endforeach()
 
+  # Pre-create the cmake/ subdirectory if a CONFIG_EXTRAS .cmake.in template
+  # will be written there below (the CONFIG_EXTRAS loop that does so runs
+  # after this point). Without this, on a clean checkout the EXISTS check
+  # right below sees no cmake/ dir yet, so ${PKG}_DIR never gets pointed at
+  # it -- but the include() line for that same extras file, appended later
+  # in this same Config.cmake, still runs and needs ${PKG}_DIR to already be
+  # correct (e.g. test_interface_files-extras.cmake reads ${PKG}_DIR to
+  # compute its interface-files basepath). A prior build leaves cmake/
+  # behind as an untracked directory, masking this on rebuilds.
+  foreach(_extra_precheck ${_ap_CONFIG_EXTRAS})
+    if(_extra_precheck MATCHES "\\.cmake\\.in$")
+      file(MAKE_DIRECTORY "${_src_dir}/cmake")
+    endif()
+  endforeach()
+
   # Set _DIR to the cmake/ subdirectory (real ament does this so extras can use ${PKG_DIR}/foo.cmake)
   if(EXISTS "${_src_dir}/cmake")
     string(APPEND _cfg_content "set(${PROJECT_NAME}_DIR \"${_src_dir}/cmake\")\n")

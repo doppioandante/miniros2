@@ -142,7 +142,19 @@ configure-time state that wouldn't exist at runtime.
   namespace.
 
 ## Dirty submodules after build
-`rosidl`, `rmw_implementation`, and `rosidl_core` do pick up untracked,
-generated `*-extras.cmake` files — produced by the `.cmake.in` CONFIG_EXTRAS
-handling described above — that are regenerated on every configure and are
-not meant to be committed.
+`rosidl`, `rmw_implementation`, `rosidl_core`, and `test_interface_files` do
+pick up untracked, generated `*-extras.cmake` files — produced by the
+`.cmake.in` CONFIG_EXTRAS handling described above — that are regenerated on
+every configure and are not meant to be committed.
+
+Because that `cmake/` subdirectory is created by the same `ament_package()`
+call that needs to know whether it exists (to decide whether `${PKG}_DIR`
+should point at it), a clean checkout and a rebuild used to behave
+differently: on the very first configure the directory didn't exist yet when
+`ament_package()` checked, so `${PKG}_DIR` was left pointing at the mock's
+own build-tree config directory instead — wrong for packages like
+`test_interface_files` whose extras derive a source-tree path from
+`${PKG}_DIR`. `ament_package()` now pre-creates `cmake/` up front whenever a
+`.cmake.in` CONFIG_EXTRAS template is going to be written there, so the
+`EXISTS` check always matches what's about to be generated, on a clean
+checkout or not.
