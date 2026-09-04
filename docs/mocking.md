@@ -77,6 +77,36 @@ A few consequences fall out of building this way:
 - **`normalize_path`** is defined in `ament_cmake_core-config.cmake` via
   `get_filename_component(... ABSOLUTE)`, matching the real macro's contract.
 
+- **`ament_cmake_mock.cmake` itself needs an `include_guard(GLOBAL)`.** It's
+  re-`include()`d every time a package's mock Config.cmake is loaded via
+  `find_package()` — including nested `find_package()` calls a package makes
+  on itself while still configuring (e.g. for `rosidl_typesupport_c`). Without
+  the guard, the file-scope `set(_ament_mock_exported_deps "")` at its top
+  reran on each of those nested includes and wiped out the
+  `ament_export_dependencies()` calls already collected for the package
+  currently configuring, so packages with message dependencies (like
+  `action_msgs` → `unique_identifier_msgs`) silently lost them from their
+  generated Config.
+
+- **`${PKG}_RECURSIVE_DEPENDENCIES` is synthesized from that same
+  accumulator.** `rosidl_generate_interfaces()` reads this variable on each
+  direct dependency to also pull in *that* dependency's own message-package
+  dependencies. Upstream `rosidl_cmake` never actually sets this
+  variable in its generated Config extras — the mock fills the gap by writing
+  it into message packages' `Config.cmake` from `_ament_mock_exported_deps`.
+
+- **Type-description target edges are added by the mock, not a patch.**
+  `rosidl_generator_type_description_generate_interfaces.cmake` lists a
+  dependency package's type-hash JSON files only as file-level `DEPENDS`, not
+  as a build-graph edge to the custom target that produces them — fine when
+  `colcon` fully builds and installs each package before the next configures,
+  but a race under `-j` in this single-tree build, where dependencies are
+  sibling subdirectories built in parallel. `ament_package()` adds the missing
+  `add_dependencies()` edge itself, using the
+  `rosidl_generate_interfaces_DEPENDENCY_PACKAGE_NAMES` the preceding
+  `rosidl_generate_interfaces()` call already computed in the same directory
+  scope.
+
 ## Runtime package discovery
 
 Because everything here builds as one CMake tree rather than being installed
@@ -111,22 +141,8 @@ configure-time state that wouldn't exist at runtime.
   tree is one `add_subdirectory` build sharing a single CMake target
   namespace.
 
-## Source patches
-
-Most submodules are used unmodified. Only `rosidl` carries a tracked local
-patch, applied by `scripts/apply_submodule_patches.sh` (see the main
-[README](../README.md)):
-
-- `rosidl_generator_type_description/cmake/rosidl_generator_type_description_generate_interfaces.cmake`
-  gets an explicit build-graph dependency on each dependency package's
-  `…__rosidl_generator_type_description` target. In a real `colcon` build,
-  dependencies are fully built and installed before a package configures, so
-  this ordering is implicit; in this single-tree build dependency packages
-  are sibling subdirectories built in parallel, so without this patch there's
-  a race where a dependency's type-hash JSON can be read before it's been
-  generated. The patch is stored as a diff in `patches/`.
-
-`rosidl`, `rmw_implementation`, and `rosidl_core` also pick up untracked,
+## Dirty submodules after build
+`rosidl`, `rmw_implementation`, and `rosidl_core` do pick up untracked,
 generated `*-extras.cmake` files — produced by the `.cmake.in` CONFIG_EXTRAS
 handling described above — that are regenerated on every configure and are
 not meant to be committed.

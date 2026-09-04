@@ -1,6 +1,16 @@
 # Stub implementations of ament_cmake macros for standalone builds.
 # Goal: compile .so files, everything else is a no-op.
 
+# This file is re-include()d every time a package's mock Config.cmake is
+# loaded via find_package() (including nested find_package() calls made
+# while a package is still configuring itself, e.g. for rosidl_typesupport_c).
+# Without an include_guard, each of those re-includes would rerun the
+# accumulator initialization below and wipe out deps already collected for
+# the package currently configuring (ament_export_dependencies() calls
+# interleaved with nested find_package() calls before its own ament_package()
+# runs), so packages with message dependencies lost them from their Config.
+include_guard(GLOBAL)
+
 # Accumulator for ament_export_dependencies calls within current package scope.
 # Reset at the start of ament_package().
 set(_ament_mock_exported_deps "")
@@ -240,6 +250,35 @@ set(${PROJECT_NAME}_DIR \"${_build_cfg_dir}\")
     #   By pointing _DIR one level inside the type_description output, _DIR/.. resolves
     #   to the type_description output dir containing the msg/*.json files.
     string(APPEND _cfg_content "set(${PROJECT_NAME}_DIR \"${_type_desc_dir}/cmake\")\n")
+    #
+    # RECURSIVE_DEPENDENCIES: rosidl_generate_interfaces.cmake reads
+    # ${dep}_RECURSIVE_DEPENDENCIES for each of a consuming package's direct
+    # dependencies, to also pull in *their* message-package dependencies (e.g.
+    # a package depending on action_msgs needs action_msgs's own dependency on
+    # unique_identifier_msgs). Upstream rosidl_cmake never actually sets this
+    # variable in its generated Config extras, so populate it here from the
+    # ament_export_dependencies() calls already collected for this package
+    # (harmless to include non-message deps like rosidl_runtime_c: the
+    # consumer filters this list down to entries with `_IDL_FILES` defined).
+    string(APPEND _cfg_content "set(${PROJECT_NAME}_RECURSIVE_DEPENDENCIES \"${_ament_mock_exported_deps}\")\n")
+
+    # rosidl_generator_type_description_generate_interfaces.cmake only lists
+    # dependency packages' type-hash JSON files as file-level DEPENDS, not as
+    # a build-graph edge to the custom target that produces them. In a
+    # single-tree standalone build, dependency packages are sibling
+    # subdirectories built in the same invocation, so under -j a consumer's
+    # type-hash generation can race ahead of a dependency's and read a JSON
+    # file that doesn't exist yet. Add the missing target-level edge here,
+    # using the DEPENDENCY_PACKAGE_NAMES the preceding rosidl_generate_interfaces()
+    # call already computed in this same directory scope.
+    if(TARGET "${PROJECT_NAME}__rosidl_generator_type_description")
+      foreach(_rtd_dep ${rosidl_generate_interfaces_DEPENDENCY_PACKAGE_NAMES})
+        if(TARGET "${_rtd_dep}__rosidl_generator_type_description")
+          add_dependencies("${PROJECT_NAME}__rosidl_generator_type_description"
+            "${_rtd_dep}__rosidl_generator_type_description")
+        endif()
+      endforeach()
+    endif()
   endif()
 
   # Re-export dependencies: find_package them so their macros are available

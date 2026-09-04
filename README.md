@@ -14,17 +14,15 @@ Requirements:
 - A standard Linux build environment (CMake, a C/C++ compiler, `make`/`ninja`)
 - [`uv`](https://docs.astral.sh/uv/) for managing the Python environment
 
-After cloning (with submodules), apply the local patches to the affected
-submodules and set up the Python environment:
+After cloning (with submodules):
 
 ```bash
 git submodule update --init --recursive
-./scripts/apply_submodule_patches.sh
 ./scripts/setup_venv.sh
+mkdir build
+uv run cmake -G Ninja -B build
+uv run cmake --build build
 ```
-
-See [`docs/mocking.md`](docs/mocking.md) for what `apply_submodule_patches.sh`
-changes in each submodule.
 
 ## Supported Middlewares
 

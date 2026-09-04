@@ -53,6 +53,14 @@ add_subdirectory(rcl_interfaces/builtin_interfaces)
 add_subdirectory(rcl_interfaces/service_msgs)
 add_subdirectory(rcl_interfaces/type_description_interfaces)
 add_subdirectory(rcl_interfaces/rcl_interfaces)
+add_subdirectory(unique_identifier_msgs)
+add_subdirectory(rcl_interfaces/action_msgs) # needs unique_identifier_msgs
+add_subdirectory(rcl_interfaces/lifecycle_msgs)
+add_subdirectory(rcl_interfaces/rosgraph_msgs)
+add_subdirectory(rcl_interfaces/statistics_msgs)
+add_subdirectory(test_interface_files)
+add_subdirectory(rcl_interfaces/test_msgs) # needs test_interface_files
+add_subdirectory(rcl_interfaces/composition_interfaces)
 
 # rmw
 add_subdirectory(rosidl_dynamic_typesupport)
@@ -77,6 +85,21 @@ add_subdirectory(rcl/rcl_yaml_param_parser)
 
 # rcl
 add_subdirectory(rcl/rcl)
+
+# common interfaces
+add_subdirectory(common_interfaces/std_msgs)
+add_subdirectory(common_interfaces/actionlib_msgs)
+add_subdirectory(common_interfaces/common_interfaces)
+add_subdirectory(common_interfaces/diagnostic_msgs)
+add_subdirectory(common_interfaces/geometry_msgs)
+add_subdirectory(common_interfaces/nav_msgs)
+add_subdirectory(common_interfaces/sensor_msgs)
+add_subdirectory(common_interfaces/shape_msgs)
+add_subdirectory(common_interfaces/std_srvs)
+add_subdirectory(common_interfaces/stereo_msgs)
+add_subdirectory(common_interfaces/trajectory_msgs)
+add_subdirectory(common_interfaces/visualization_msgs)
+
 
 # Runtime smoke test: rcl publisher/subscriber round trip over the compiled-in RMW.
 add_executable(rcl_pubsub_smoke_test smoke_test/rcl_pubsub_smoke_test.c)
